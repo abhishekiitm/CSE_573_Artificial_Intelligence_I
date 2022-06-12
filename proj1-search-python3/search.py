@@ -87,19 +87,83 @@ class VisitStatus:
     IN_FRONTIER = 'in_frontier'
 
 class Node(object):
-    def __init__(self, state, parent=None, action=None, path_cost=None):
+    def __init__(self, state, parent=None, action=None, path_cost=0):
         self.state = state
         self.parent = parent
         self.action = action
         self.path_cost = path_cost
 
-def bestFirstSearch(problem, eval_func):
-    initial_state = problem.getStartState()
-    node = Node(initial_state)
-    frontier = util.PriorityQueue()
-    reached = {}
-    reached[initial_state] = node
+# eval_func should return +1 for BFS, -1 for DFS and edge weight for UCS
+
+class SearchType:
+    BFS = "bfs"
+    DFS = "dfs"
+    UCS = "ucs"
+
+class Search(object):
+    def __init__(self, search_type):
+        self.search_type = search_type
+
+    # def is_ancestor(self, node, reached):
+        
+    #     while node.parent:
+
+        
+    def eval_path_cost(self, action_cost):
+        if self.search_type == SearchType.BFS:
+            return 1
+        elif self.search_type == SearchType.DFS:
+            return -1
+        elif self.search_type == SearchType.UCS:
+            return action_cost
     
+    def expand(self, problem, node):
+        children = []
+        s = node.state
+        successors = problem.getSuccessors(s)
+        ancestors = set()
+
+        expand_node = node
+        if self.search_type == SearchType.DFS:
+            while node:
+                ancestors.add(node.state)
+                node = node.parent
+
+        for successor_state, action, cost in successors:
+            path_cost = expand_node.path_cost + self.eval_path_cost(cost)
+            if successor_state not in ancestors:
+                children.append(Node(successor_state, parent=expand_node, action=action, path_cost=path_cost))
+        return children
+
+    def bestFirstSearch(self, problem):
+        initial_state = problem.getStartState()
+        node = Node(initial_state)
+        frontier = util.PriorityQueue()
+        frontier.push(node, node.path_cost)
+        reached = {}
+        reached[initial_state] = node
+
+        while not frontier.isEmpty():
+            node = frontier.pop()
+            if problem.isGoalState(node.state): return node
+            for child in self.expand(problem, node):
+                s = child.state
+                if s not in reached:
+                    reached[s] = child
+                    frontier.push(child, child.path_cost)
+                elif child.path_cost < reached[s].path_cost:
+                    frontier.update(child, child.path_cost)
+
+
+        raise ValueError(f"Invalid board config. No solution found by {self.search_type}.")
+
+def action_sequence(node):
+    seq = []
+    while node.parent:
+        seq.append(node.action)
+        node = node.parent
+    seq.reverse()
+    return seq
 
 def depthFirstSearch(problem):
     """
@@ -116,80 +180,27 @@ def depthFirstSearch(problem):
     print("Start's successors:", problem.getSuccessors(problem.getStartState()))
     """
     "*** YOUR CODE HERE ***"
-    visit_status = {}
-    parent = {}
-    start_state = problem.getStartState()
-    search_datastruct = util.Stack()
-    search_datastruct.push(start_state)
-    visit_status[start_state] = VisitStatus.IN_FRONTIER
-    parent[start_state] = None
-    action = None
+    dfs_search = Search(SearchType.DFS)
+    node = dfs_search.bestFirstSearch(problem)
+    seq = action_sequence(node)
+    return seq
 
-    while not search_datastruct.isEmpty():
-        curr_node = search_datastruct.pop()
-        if problem.isGoalState(curr_node): 
-            return get_action_sequence(parent, curr_node)
-        successors = problem.getSuccessors(curr_node)
-        for successor_node, action, cost in successors:
-            if successor_node not in visit_status:
-                search_datastruct.push(successor_node)
-                visit_status[successor_node] = VisitStatus.IN_FRONTIER
-                parent[successor_node] = (curr_node, action)
-        visit_status[curr_node] = VisitStatus.VISITED
-    raise ValueError("Invalid board config. No solution found by dfs.")
 
 def breadthFirstSearch(problem):
     """Search the shallowest nodes in the search tree first."""
     "*** YOUR CODE HERE ***"
-    visited = set({})
-    parent = {}
-    start_state = problem.getStartState()
-    search_datastruct = util.Queue()
-    search_datastruct.push(start_state)
-    visited.add(start_state)
-    parent[start_state] = None
-    action = None
-
-    while not search_datastruct.isEmpty():
-        curr_node = search_datastruct.pop()
-        if problem.isGoalState(curr_node): 
-            return get_action_sequence(parent, curr_node)
-        successors = problem.getSuccessors(curr_node)
-        for successor_node, action, cost in successors:
-            if successor_node not in visited:
-                search_datastruct.push(successor_node)
-                visited.add(successor_node)
-                parent[successor_node] = (curr_node, action)
-
-    raise ValueError("Invalid board config. No solution found by bfs.")
+    bfs_search = Search(SearchType.BFS)
+    node = bfs_search.bestFirstSearch(problem)
+    seq = action_sequence(node)
+    return seq
 
 def uniformCostSearch(problem):
     """Search the node of least total cost first."""
     "*** YOUR CODE HERE ***"
-    visited = set({})
-    parent = {}
-    path_cost = {}
-    start_state = problem.getStartState()
-    search_datastruct = util.PriorityQueue()
-    search_datastruct.push(start_state, 0)
-    visited.add(start_state)
-    parent[start_state] = None
-    path_cost[start_state] = 0
-    action = None
-
-    while not search_datastruct.isEmpty():
-        curr_node = search_datastruct.pop()
-        if problem.isGoalState(curr_node): 
-            return get_action_sequence(parent, curr_node)
-        successors = problem.getSuccessors(curr_node)
-        for successor_node, action, cost in successors:
-            if successor_node not in visited or path_cost[curr_node] + cost < path_cost[successor_node]:
-                search_datastruct.push(successor_node, path_cost[curr_node] + cost)
-                visited.add(successor_node)
-                parent[successor_node] = (curr_node, action)
-                path_cost[successor_node] = path_cost[curr_node] + cost
-
-    raise ValueError("Invalid board config. No solution found by bfs.")
+    ucs_search = Search(SearchType.UCS)
+    node = ucs_search.bestFirstSearch(problem)
+    seq = action_sequence(node)
+    return seq
 
 def nullHeuristic(state, problem=None):
     """
